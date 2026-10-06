@@ -1,0 +1,34 @@
+name: run-notebook
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: conda-incubator/setup-miniconda@v4
+        with:
+          miniforge-version: latest
+          channels: conda-forge
+          conda-remove-defaults: "true"
+          environment-file: environment.yml
+          activate-environment: biometeorology-air-quality-and-human-health
+      - name: Execute notebook
+        shell: bash -el {0}
+        run: >-
+          jupyter nbconvert --to notebook --execute
+          --ExecutePreprocessor.timeout=900
+          --output-dir executed
+          notebooks/direct_thermal_indices.ipynb
+      - uses: actions/upload-artifact@v7
+        with:
+          name: executed-notebook
+          path: executed/

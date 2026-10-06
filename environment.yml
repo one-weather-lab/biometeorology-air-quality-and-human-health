@@ -1,0 +1,12 @@
+name: biometeorology-air-quality-and-human-health
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - cartopy
+  - jupyterlab
+  - ipykernel
+  - nbconvert
+  - pip:
+      - thermofeel[examples]==2.3.0
