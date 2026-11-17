@@ -1,1 +1,11 @@
-thermofeel[examples]==2.3.0
+thermofeel==2.3.0
+biometeo==0.5.2
+numpy
+pandas
+matplotlib
+cartopy
+earthkit-data
+earthkit-meteo
+earthkit-plots
+ecmwf-opendata
+requests

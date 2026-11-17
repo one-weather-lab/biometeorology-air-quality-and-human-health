@@ -5,17 +5,19 @@ dependencies:
   - python=3.12
   - pip
   - numpy
+  - pandas
+  - matplotlib
   - cartopy
-  - jupyterlab
-  - ipykernel
-  - nbconvert
   - earthkit-data
   - earthkit-meteo
   - ecmwf-opendata
   - eccodes
   - python-eccodes
-  - matplotlib
   - requests
+  - jupyterlab
+  - ipykernel
+  - nbconvert
   - pip:
       - thermofeel==2.3.0
+      - biometeo==0.5.2
       - earthkit-plots
