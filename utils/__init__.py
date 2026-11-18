@@ -1,6 +1,6 @@
 """
 Script Name: __init__.py
-Purpose: Public utility package exports for M216 biometeorology notebooks.
+Purpose: Public exports of the utils package for the notebooks in this repository.
 Author(s): Christos Giannaros, One Weather Lab, UoI <chris.giannaros@uoi.gr>
 Last updated: 2026-11-17
 Version: 0.3.0
