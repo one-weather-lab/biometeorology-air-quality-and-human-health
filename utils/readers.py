@@ -1,9 +1,9 @@
 """
 Script Name: readers.py
-Purpose: Load and validate committed M216 thermal-index CSV datasets.
+Purpose: Load and validate thermal-index CSV datasets.
 Author(s): Christos Giannaros, One Weather Lab, UoI <chris.giannaros@uoi.gr>
 Last updated: 2026-11-17
-Version: 0.1.2
+Version: 0.2.0
 License: MIT
 """
 
@@ -20,9 +20,27 @@ FOUR_DAYS_FILENAME = "ioannina_2012_four_seasonal_days.csv"
 FOUR_DAYS_COLUMNS = ("time_utc", "ta", "vp", "ws1_1", "ws10", "tmrt")
 NUMERIC_COLUMNS = ("ta", "vp", "ws1_1", "ws10", "tmrt")
 WIND_COLUMNS = ("ws1_1", "ws10")
+UTC_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M UTC"
 
 
 # --- Functions ---
+# [Internal helpers]
+def _format_utc_timestamp(timestamp) -> str:
+    """Format a timestamp as a UTC string for user-facing output.
+
+    Parameters
+    ----------
+    timestamp : pandas.Timestamp or datetime.datetime
+        Timestamp in UTC.
+
+    Returns
+    -------
+    str
+        Timestamp formatted with ``UTC_TIMESTAMP_FORMAT``, such as ``2012-04-26 07:00 UTC``.
+    """
+    return timestamp.strftime(UTC_TIMESTAMP_FORMAT)
+
+
 # [Dataset readers]
 def read_four_seasonal_days(data_dir: str | Path | None = None) -> pd.DataFrame:
     """Read and validate the 96-hour four-seasonal-days CSV dataset.

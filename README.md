@@ -1,5 +1,7 @@
 # Biometeorology, Air Quality and Human Health
 
+The notebooks in this repository accompany the course "Biometeorology, Air Quality and Human Health" (M216) of the Postgraduate Studies Program ["Atmospheric Sciences and Environment"](https://atmos-physics-uoi.gr/en/home/) at the Department of Physics, University of Ioannina, Greece.
+
 ## Notebooks
 
 | # | Title | Core topics |
@@ -7,7 +9,7 @@
 | 01 | 01_direct_thermal_indices | **Direct thermal indices** computed from the latest or a past ECMWF open-data forecast and mapped over Europe. These include apparent temperature, heat index, humidex, discomfort index, simplified wet-bulb globe temperature, net effective temperature and wind chill temperature |
 | 02 | 02_thermophysiological_indices | **Thermo-physiological indices** computed for four days spanning the four seasons of 2012 in Ioannina (PET and UTCI) and mapped over Europe as gridded UTCI from ECMWF open-data forecasts (Part 1) |
 
-Notebook 01 was adapted from `examples/thermofeel-earthkit-demo.ipynb` in [ecmwf/thermofeel](https://github.com/ecmwf/thermofeel), release 2.3.0 (Apache-2.0, Copyright 1996- ECMWF), while Notebook 02 adapts the European open-data retrieval and mapping workflow from the same Apache-2.0 release in its Section 4. The first cell of Notebook 01 states the changes made to it.
+Notebook 01 was adapted from `examples/thermofeel-earthkit-demo.ipynb` in [ecmwf/thermofeel](https://github.com/ecmwf/thermofeel), release 2.3.0 (Apache-2.0, Copyright 1996- ECMWF), while Notebook 02 adapts the European open-data retrieval and mapping workflow from the same Apache-2.0 release in its Section 4, through `utils/europe.py`. The first cell of Notebook 01 and the header of `utils/europe.py` state the changes made.
 
 ## Running the Notebooks
 

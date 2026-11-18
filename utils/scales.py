@@ -4,7 +4,7 @@ Purpose: Thermal-stress assessment scales (PET/mPET and UTCI) and vectorized
          classification helpers.
 Author(s): Christos Giannaros, One Weather Lab, UoI <chris.giannaros@uoi.gr>
 Last updated: 2026-11-17
-Version: 0.1.1
+Version: 0.2.0
 License: MIT
 """
 
@@ -122,6 +122,13 @@ UTCI_SCALE = ThermalScale(
     ),
 )
 
+# PET has no "very strong" classes, so its open-ended extremes are compared with both the
+# UTCI very strong and extreme classes.
+UTCI_TO_PET_CLASS = {
+    "Very strong cold stress": "Extreme cold stress",
+    "Very strong heat stress": "Extreme heat stress",
+}
+
 # Operational UTCI polynomial validity bounds:
 # Bröde, P. et al. (2012). Deriving the operational procedure for the Universal
 # Thermal Climate Index (UTCI). https://doi.org/10.1007/s00484-011-0454-1
@@ -134,6 +141,23 @@ UTCI_VALIDITY_BOUNDS = {
 
 
 # --- Functions ---
+# [Internal helpers]
+def _align_utci_to_pet_classes(utci_classes: pd.Series) -> pd.Series:
+    """Rename the UTCI very strong classes to the PET extreme classes they are compared with.
+
+    Parameters
+    ----------
+    utci_classes : pandas.Series
+        UTCI stress-category labels from ``classify`` with ``UTCI_SCALE``.
+
+    Returns
+    -------
+    pandas.Series
+        The same labels with ``UTCI_TO_PET_CLASS`` applied, for comparison with PET classes.
+    """
+    return utci_classes.replace(UTCI_TO_PET_CLASS)
+
+
 # [Classification]
 def classify(values: Any, scale: ThermalScale) -> np.ndarray | pd.Series:
     """Classify numeric thermal-index values into stress-class labels.
