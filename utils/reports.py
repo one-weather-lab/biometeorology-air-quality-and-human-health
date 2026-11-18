@@ -158,17 +158,17 @@ def format_pet_daily_table(df: pd.DataFrame, season_labels: dict[str, str]) -> s
     dates = _date_strings(df)
     lines = [
         f"Loaded {len(df)} hourly records across {dates.nunique()} days in Ioannina.",
-        f"{'Day':24s} {'Ta [C]':27s} {'Tmrt [C]':28s} {'ws1_1 [m/s]':30s} {'PET [C]':27s}",
+        f"{'Day':24s} {'Ta [°C]':27s} {'Tmrt [°C]':28s} {'ws1_1 [m/s]':30s} {'PET [°C]':27s}",
         "-" * 140,
     ]
     for date_str, label in season_labels.items():
         sub = df[dates == date_str]
         lines.append(
             f"{label:24s} "
-            f"{_format_minmax(sub, 'ta', 'C'):27s} "
-            f"{_format_minmax(sub, 'tmrt', 'C'):28s} "
+            f"{_format_minmax(sub, 'ta', '°C'):27s} "
+            f"{_format_minmax(sub, 'tmrt', '°C'):28s} "
             f"{_format_minmax(sub, 'ws1_1', 'm/s'):30s} "
-            f"{_format_minmax(sub, 'pet', 'C'):27s}"
+            f"{_format_minmax(sub, 'pet', '°C'):27s}"
         )
     return "\n".join(lines)
 
@@ -219,10 +219,8 @@ def format_utci_screening(df: pd.DataFrame, season_labels: dict[str, str]) -> st
         reasons = ", ".join(_utci_exclusion_reasons(row))
         lines.append(f"Excluded timestamp : {_format_utc_timestamp(row.time_utc)} -> {reasons}")
     lines += [
-        f"Reason for blank   : operational UTCI requires 10 m wind in [{ws_low:g}, {ws_high:.1f}] m/s; "
-        f"sub-{ws_low:g} m/s winds are left unclipped rather than floored.",
         "",
-        f"{'Day':24s} {'Valid':7s} {'ws10 [m/s]':30s} {'UTCI [C]':27s}",
+        f"{'Day':24s} {'Valid':7s} {'ws10 [m/s]':30s} {'UTCI [°C]':27s}",
         "-" * 92,
     ]
     dates = _date_strings(df)
@@ -233,7 +231,7 @@ def format_utci_screening(df: pd.DataFrame, season_labels: dict[str, str]) -> st
             f"{label:24s} "
             f"{len(sub_valid):2d} / {len(sub):2d} "
             f"{_format_minmax(sub, 'ws10', 'm/s'):30s} "
-            f"{_format_minmax(sub_valid, 'utci', 'C'):27s}"
+            f"{_format_minmax(sub_valid, 'utci', '°C'):27s}"
         )
     return "\n".join(lines)
 
@@ -326,9 +324,9 @@ def format_radiative_load(df: pd.DataFrame, timestamp: str) -> str:
     utci_shift = f"{no_load['utci'] - calc['utci']:+9.2f}" if both_valid else "      N/A"
     return "\n".join([
         f"Timestamp {_format_utc_timestamp(target_utc)} | "
-        f"Ta = {row['ta']:.2f} C, Tmrt = {row['tmrt']:.2f} C, VP = {row['vp']:.2f} hPa, "
+        f"Ta = {row['ta']:.2f} °C, Tmrt = {row['tmrt']:.2f} °C, VP = {row['vp']:.2f} hPa, "
         f"ws1_1 = {row['ws1_1']:.2f} m/s, ws10 = {row['ws10']:.2f} m/s",
-        f"{'Case':48s} {'PET [C]':>9s} {'PET class':24s} {'UTCI [C]':>9s} {'UTCI class':24s}",
+        f"{'Case':48s} {'PET [°C]':>9s} {'PET class':24s} {'UTCI [°C]':>9s} {'UTCI class':24s}",
         "-" * 118,
         f"{'Calculated radiative load (RayMan Tmrt)':48s} {calc['pet']:9.2f} {calc['pet_class']:24s} "
         f"{_utci_text(calc['utci'])} {calc['utci_class']:24s}",
