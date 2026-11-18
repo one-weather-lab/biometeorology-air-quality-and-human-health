@@ -4,7 +4,7 @@ Purpose: Plot diurnal PET and UTCI time series, index comparisons, and
          European UTCI maps.
 Author(s): Christos Giannaros, One Weather Lab, UoI <chris.giannaros@uoi.gr>
 Last updated: 2026-11-18
-Version: 0.2.2
+Version: 0.2.3
 License: MIT
 """
 
@@ -28,12 +28,6 @@ FIG_DPI_OVERVIEW = 200
 INLINE_DISPLAY_DPI = 95
 HOUR_TICKS = (0, 3, 6, 9, 12, 15, 18, 21)
 SEASON_COLORS = ("#2b83ba", "#1b9e77", "#d95f02", "#7570b3")
-DEFAULT_SEASON_LABELS = {
-    "2012-01-31": "Winter (31 Jan 2012)",
-    "2012-04-26": "Spring (26 Apr 2012)",
-    "2012-07-11": "Summer (11 Jul 2012)",
-    "2012-10-02": "Autumn (2 Oct 2012)",
-}
 
 # --- Logging ---
 LOG = logging.getLogger("owl.m216.visualization")
@@ -52,16 +46,15 @@ def _resolve_season_labels(
     dates : list of str
         Sorted date strings formatted as ``YYYY-MM-DD``.
     season_labels : dict of str to str or None
-        Optional custom mapping overriding ``DEFAULT_SEASON_LABELS``.
+        Optional mapping from ``YYYY-MM-DD`` strings to labels; a date without
+        an entry is shown as its date string.
 
     Returns
     -------
     dict of str to str
         Mapping containing a display label for every date in ``dates``.
     """
-    labels = dict(DEFAULT_SEASON_LABELS)
-    if season_labels:
-        labels.update(season_labels)
+    labels = season_labels or {}
     return {d: labels.get(d, d) for d in dates}
 
 
