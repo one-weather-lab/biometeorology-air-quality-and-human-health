@@ -3,8 +3,8 @@ Script Name: visualization.py
 Purpose: Plot diurnal PET and UTCI time series, index comparisons, and
          European UTCI maps.
 Author(s): Christos Giannaros, One Weather Lab, UoI <chris.giannaros@uoi.gr>
-Last updated: 2026-11-17
-Version: 0.2.1
+Last updated: 2026-11-18
+Version: 0.2.2
 License: MIT
 """
 
@@ -481,7 +481,7 @@ def plot_europe_utci_map(
     chart.coastlines()
     chart.borders()
     chart.gridlines()
-    title = f"European {scale.name} Stress Categories"
+    title = scale.name
     if valid_label:
         title = f"{title} ({valid_label})"
     chart.title(title)
@@ -495,10 +495,13 @@ def plot_europe_utci_map(
         )
         for band in scale.bands
     ]
+    chart.fig.canvas.draw()
+    map_bbox = chart.fig.axes[0].get_tightbbox(chart.fig.canvas.get_renderer())
+    legend_y = map_bbox.transformed(chart.fig.transFigure.inverted()).y0 - 0.01
     chart.fig.legend(
         handles=handles,
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.0),
+        bbox_to_anchor=(0.5, legend_y),
         ncol=2,
         frameon=False,
         fontsize=9.5,
@@ -519,5 +522,3 @@ def plot_europe_utci_map(
     else:
         plt.close(chart.fig)
     return out
-
-
