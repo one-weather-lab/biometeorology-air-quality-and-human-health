@@ -1,10 +1,10 @@
 """
 Script Name: visualization.py
-Purpose: Plot diurnal PET and UTCI time series, index comparisons, and
-         European UTCI maps.
+Purpose: Plot diurnal PET and UTCI time series, index comparisons,
+         European UTCI maps, and population-group mPET figures.
 Author(s): Christos Giannaros, One Weather Lab, UoI <chris.giannaros@uoi.gr>
 Last updated: 2026-11-18
-Version: 0.2.3
+Version: 0.3.0
 License: MIT
 """
 
@@ -20,7 +20,8 @@ from matplotlib.patches import Patch
 import numpy as np
 import pandas as pd
 
-from .scales import ThermalScale, classify
+from .readers import ACTIVITY_GROUPS, CORE_GROUPS, PopulationGroup
+from .scales import ScaleBand, ThermalScale, _class_shares, classify
 
 # --- Configuration ---
 FIG_DPI = 300
@@ -28,6 +29,9 @@ FIG_DPI_OVERVIEW = 200
 INLINE_DISPLAY_DPI = 95
 HOUR_TICKS = (0, 3, 6, 9, 12, 15, 18, 21)
 SEASON_COLORS = ("#2b83ba", "#1b9e77", "#d95f02", "#7570b3")
+GROUP_KIND_COLORS = {"senior": "#1b6ca8", "adult": "#6a3d9a", "worker": "#b15928"}
+ACTIVITY_COLORS = ("#1a9850", "#b15928", "#7f0000")
+MONTH_LABELS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
 # --- Logging ---
 LOG = logging.getLogger("owl.m216.visualization")
@@ -56,6 +60,141 @@ def _resolve_season_labels(
     """
     labels = season_labels or {}
     return {d: labels.get(d, d) for d in dates}
+
+
+def _seasonal_hour_frame(
+    df: pd.DataFrame,
+    season_labels: dict[str, str] | None,
+) -> tuple[pd.DataFrame, list[str], dict[str, str]]:
+    """Add date and hour columns to hourly records and resolve the panel labels.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Hourly DataFrame with a datetime column ``time_utc``.
+    season_labels : dict of str to str or None
+        Optional mapping from ``YYYY-MM-DD`` strings to subplot titles.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Copy of ``df`` with ``date_str`` (``YYYY-MM-DD``) and ``hour_utc`` [h] columns.
+    list of str
+        Sorted unique dates.
+    dict of str to str
+        Display label of every date.
+    """
+    work = df.copy()
+    work["date_str"] = work["time_utc"].dt.strftime("%Y-%m-%d")
+    work["hour_utc"] = work["time_utc"].dt.hour
+    dates = sorted(work["date_str"].unique().tolist())
+    labels = _resolve_season_labels(dates=dates, season_labels=season_labels)
+    return work, dates, labels
+
+
+def _visible_stress_bands(
+    scale: ThermalScale,
+    y_min: float,
+    y_max: float,
+) -> list[tuple[ScaleBand, float, float]]:
+    """Clip the bands of a scale to a y-range and keep those that remain visible.
+
+    Parameters
+    ----------
+    scale : ThermalScale
+        Thermal-stress scale whose bands are shaded.
+    y_min : float
+        Lower y-limit [degC].
+    y_max : float
+        Upper y-limit [degC].
+
+    Returns
+    -------
+    list of tuple
+        One ``(band, lower, upper)`` entry per band that overlaps the y-range, with the
+        limits clipped to it [degC].
+    """
+    visible_bands = []
+    for band in scale.bands:
+        band_low = y_min if np.isneginf(band.lower) else max(band.lower, y_min)
+        band_high = y_max if np.isposinf(band.upper) else min(band.upper, y_max)
+        if band_high > band_low:
+            visible_bands.append((band, band_low, band_high))
+    return visible_bands
+
+
+def _format_seasonal_panel(ax, title: str, y_min: float, y_max: float) -> None:
+    """Apply the title, ticks, limits and grid shared by the seasonal diurnal panels.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Panel to format.
+    title : str
+        Panel title.
+    y_min : float
+        Lower y-limit [degC].
+    y_max : float
+        Upper y-limit [degC].
+
+    Returns
+    -------
+    None
+        The panel is formatted in place.
+    """
+    ax.set_title(title, fontsize=12.5, fontweight="bold")
+    ax.set_xticks(HOUR_TICKS)
+    ax.tick_params(axis="both", labelsize=11.5)
+    ax.set_xlim(-0.5, 23.5)
+    ax.set_ylim(y_min, y_max)
+    ax.grid(True, linestyle=":", alpha=0.35, color="#666666")
+
+
+def _label_seasonal_axes(axes, n_panels: int) -> None:
+    """Hide unused panels of a 2x2 seasonal grid and label its outer axes.
+
+    Parameters
+    ----------
+    axes : numpy.ndarray
+        2x2 array of matplotlib axes.
+    n_panels : int
+        Number of panels in use.
+
+    Returns
+    -------
+    None
+        The axes are modified in place.
+    """
+    for ax in axes.ravel()[n_panels:]:
+        ax.set_visible(False)
+
+    axes[1, 0].set_xlabel("Hour (UTC)", fontsize=12.5)
+    axes[1, 1].set_xlabel("Hour (UTC)", fontsize=12.5)
+    axes[0, 0].set_ylabel("Temperature (°C)", fontsize=12.5)
+    axes[1, 0].set_ylabel("Temperature (°C)", fontsize=12.5)
+
+
+def _save_figure(fig, output_path: str | Path) -> Path:
+    """Save a figure as a PNG, show it inline and close it.
+
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure
+        Figure to save.
+    output_path : str or pathlib.Path
+        Destination PNG file path; missing parent folders are created.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the saved PNG figure.
+    """
+    out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=FIG_DPI_OVERVIEW, bbox_inches="tight")
+    plt.show()
+    plt.close(fig)
+    return out
 
 
 def _plot_index_diurnal(
@@ -99,11 +238,7 @@ def _plot_index_diurnal(
     if index_col not in df.columns:
         raise ValueError(f"DataFrame missing index column '{index_col}'")
 
-    work = df.copy()
-    work["date_str"] = work["time_utc"].dt.strftime("%Y-%m-%d")
-    work["hour_utc"] = work["time_utc"].dt.hour
-    dates = sorted(work["date_str"].unique().tolist())
-    labels = _resolve_season_labels(dates=dates, season_labels=season_labels)
+    work, dates, labels = _seasonal_hour_frame(df=df, season_labels=season_labels)
 
     # Shared y-range across panels
     all_vals = np.concatenate(
@@ -121,12 +256,7 @@ def _plot_index_diurnal(
     axes_flat = axes.ravel()
 
     # Draw stress bands and diurnal curves per seasonal day
-    visible_bands = []
-    for band in scale.bands:
-        band_low = y_min if np.isneginf(band.lower) else max(band.lower, y_min)
-        band_high = y_max if np.isposinf(band.upper) else min(band.upper, y_max)
-        if band_high > band_low:
-            visible_bands.append((band, band_low, band_high))
+    visible_bands = _visible_stress_bands(scale=scale, y_min=y_min, y_max=y_max)
 
     for ax, date_str in zip(axes_flat, dates):
         sub = work[work["date_str"] == date_str].sort_values("hour_utc")
@@ -159,20 +289,9 @@ def _plot_index_diurnal(
                 color="#444444",
             )
 
-        ax.set_title(labels[date_str], fontsize=12.5, fontweight="bold")
-        ax.set_xticks(HOUR_TICKS)
-        ax.tick_params(axis="both", labelsize=11.5)
-        ax.set_xlim(-0.5, 23.5)
-        ax.set_ylim(y_min, y_max)
-        ax.grid(True, linestyle=":", alpha=0.35, color="#666666")
+        _format_seasonal_panel(ax=ax, title=labels[date_str], y_min=y_min, y_max=y_max)
 
-    for ax in axes_flat[len(dates) :]:
-        ax.set_visible(False)
-
-    axes[1, 0].set_xlabel("Hour (UTC)", fontsize=12.5)
-    axes[1, 1].set_xlabel("Hour (UTC)", fontsize=12.5)
-    axes[0, 0].set_ylabel("Temperature (°C)", fontsize=12.5)
-    axes[1, 0].set_ylabel("Temperature (°C)", fontsize=12.5)
+    _label_seasonal_axes(axes=axes, n_panels=len(dates))
 
     # Combined curve and thermal-stress band legend
     curve_handles = [
@@ -210,13 +329,108 @@ def _plot_index_diurnal(
         title_fontsize=11.0,
     )
     fig.tight_layout(rect=(0.0, 0.02, 1.0, 0.92), h_pad=1.2, w_pad=1.0)
+    return _save_figure(fig=fig, output_path=output_path)
 
-    out = Path(output_path)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out, dpi=FIG_DPI_OVERVIEW, bbox_inches="tight")
-    plt.show()
-    plt.close(fig)
-    return out
+
+def _plot_group_diurnal(
+    df: pd.DataFrame,
+    group_styles: list[tuple[PopulationGroup, str, str]],
+    scale: ThermalScale,
+    output_path: str | Path,
+    title: str,
+    season_labels: dict[str, str],
+) -> Path:
+    """Build and save a 2x2 seasonal diurnal figure of the mPET of several population groups.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Hourly DataFrame from ``read_hourly_mpet`` with ``time_utc``, ``ta`` and the mPET
+        column of every group; hours outside the days of ``season_labels`` are ignored.
+    group_styles : list of tuple
+        One ``(group, color, linestyle)`` entry per plotted group, in legend order.
+    scale : ThermalScale
+        Thermal-stress scale defining the shaded background bands.
+    output_path : str or pathlib.Path
+        Destination PNG file path.
+    title : str
+        Figure super-title.
+    season_labels : dict of str to str
+        Mapping from ``YYYY-MM-DD`` strings to subplot titles; its keys select one to four days.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the saved PNG figure.
+    """
+    columns = ["ta", *(group.column for group, _, _ in group_styles)]
+    missing = [column for column in columns if column not in df.columns]
+    if missing:
+        raise ValueError(f"DataFrame missing group columns {missing}")
+    if not 1 <= len(season_labels) <= 4:
+        raise ValueError("season_labels must name one to four days")
+
+    selected = df[df["time_utc"].dt.strftime("%Y-%m-%d").isin(season_labels)]
+    work, dates, labels = _seasonal_hour_frame(df=selected, season_labels=season_labels)
+    absent = sorted(set(season_labels) - set(dates))
+    if absent:
+        raise ValueError(f"DataFrame has no hours for the days {absent}")
+
+    # Shared y-range across panels
+    finite_vals = np.concatenate([work[column].to_numpy(dtype=float) for column in columns])
+    y_min = float(np.floor(finite_vals.min() / 5.0) * 5.0 - 2.0)
+    y_max = float(np.ceil(finite_vals.max() / 5.0) * 5.0 + 2.0)
+
+    fig, axes = plt.subplots(2, 2, figsize=(13.0, 8.5), sharex=True, sharey=True)
+    visible_bands = _visible_stress_bands(scale=scale, y_min=y_min, y_max=y_max)
+    for ax, date_str in zip(axes.ravel(), dates):
+        sub = work[work["date_str"] == date_str].sort_values("hour_utc")
+        for band, band_low, band_high in visible_bands:
+            ax.axhspan(band_low, band_high, color=band.color, alpha=0.30, zorder=0)
+        hours = sub["hour_utc"].to_numpy()
+        ax.plot(hours, sub["ta"], color="#111111", linestyle=":", linewidth=1.6)
+        for group, color, linestyle in group_styles:
+            ax.plot(hours, sub[group.column], color=color, linestyle=linestyle, linewidth=2.0)
+        _format_seasonal_panel(ax=ax, title=labels[date_str], y_min=y_min, y_max=y_max)
+    _label_seasonal_axes(axes=axes, n_panels=len(dates))
+
+    curve_handles = [
+        Line2D([0], [0], color=color, linestyle=linestyle, linewidth=2.0, label=group.label)
+        for group, color, linestyle in group_styles
+    ]
+    curve_handles.append(Line2D([0], [0], color="#111111", linestyle=":", linewidth=1.6, label="Air temperature ($T_a$)"))
+    band_handles = [
+        Patch(
+            facecolor=band.color,
+            alpha=0.45,
+            edgecolor="#666666",
+            linewidth=0.5,
+            label=f"{band.label} ({band.format_range()})",
+        )
+        for band, _, _ in visible_bands
+    ]
+    legend_rows = -(-len(curve_handles) // 2)
+    fig.suptitle(title, fontsize=14.5, fontweight="bold", y=0.99)
+    fig.legend(
+        handles=curve_handles,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.955),
+        ncol=2,
+        frameon=False,
+        fontsize=11.5,
+    )
+    fig.legend(
+        handles=band_handles,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.015),
+        ncol=3,
+        frameon=False,
+        fontsize=10.5,
+        title=f"{scale.name} stress classes",
+        title_fontsize=11.0,
+    )
+    fig.tight_layout(rect=(0.0, 0.02, 1.0, 0.92 - 0.03 * (legend_rows - 1)), h_pad=1.2, w_pad=1.0)
+    return _save_figure(fig=fig, output_path=output_path)
 
 
 # [Diurnal plot builders]
@@ -387,6 +601,144 @@ def plot_pet_utci_comparison(
     plt.show()
     plt.close(fig)
     return out
+
+
+# [Population group builders]
+def plot_mpet_groups_diurnal(
+    df: pd.DataFrame,
+    scale: ThermalScale,
+    output_path: str | Path,
+    *,
+    season_labels: dict[str, str],
+) -> Path:
+    """Render and save the 2x2 seasonal diurnal mPET figure of the six population groups.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Hourly DataFrame from ``read_hourly_mpet``.
+    scale : ThermalScale
+        Thermal-stress scale defining the shaded background bands (``PET_SCALE``).
+    output_path : str or pathlib.Path
+        Destination PNG file path.
+    season_labels : dict of str to str
+        Mapping from ``YYYY-MM-DD`` strings to subplot titles; its keys select the days.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the saved PNG figure.
+    """
+    group_styles = [
+        (group, GROUP_KIND_COLORS[group.kind], "-" if group.sex == "Female" else "--") for group in CORE_GROUPS
+    ]
+    return _plot_group_diurnal(
+        df=df,
+        group_styles=group_styles,
+        scale=scale,
+        output_path=output_path,
+        title="Hourly mPET of six population groups in Ioannina",
+        season_labels=season_labels,
+    )
+
+
+def plot_mpet_worker_activity(
+    df: pd.DataFrame,
+    scale: ThermalScale,
+    output_path: str | Path,
+    *,
+    season_labels: dict[str, str],
+) -> Path:
+    """Render and save the 2x2 seasonal diurnal mPET figure of male workers by activity level.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Hourly DataFrame from ``read_hourly_mpet``.
+    scale : ThermalScale
+        Thermal-stress scale defining the shaded background bands (``PET_SCALE``).
+    output_path : str or pathlib.Path
+        Destination PNG file path.
+    season_labels : dict of str to str
+        Mapping from ``YYYY-MM-DD`` strings to subplot titles; its keys select the days.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the saved PNG figure.
+    """
+    group_styles = [(group, color, "-") for group, color in zip(ACTIVITY_GROUPS, ACTIVITY_COLORS)]
+    return _plot_group_diurnal(
+        df=df,
+        group_styles=group_styles,
+        scale=scale,
+        output_path=output_path,
+        title="Hourly mPET of male outdoor workers by activity level in Ioannina",
+        season_labels=season_labels,
+    )
+
+
+def plot_mpet_bioclimate(
+    frequencies: dict[str, pd.DataFrame],
+    scale: ThermalScale,
+    output_path: str | Path,
+) -> Path:
+    """Render and save the monthly thermal bioclimate diagram of the six population groups.
+
+    Parameters
+    ----------
+    frequencies : dict of str to pandas.DataFrame
+        Monthly class counts of each group, keyed by mPET column name, as returned by
+        ``group_class_frequencies``.
+    scale : ThermalScale
+        Thermal-stress scale whose classes are stacked (``PET_SCALE``).
+    output_path : str or pathlib.Path
+        Destination PNG file path.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the saved PNG figure.
+    """
+    missing = [group.column for group in CORE_GROUPS if group.column not in frequencies]
+    if missing:
+        raise ValueError(f"frequencies missing group columns {missing}")
+
+    months = np.arange(1, 13)
+    fig, axes = plt.subplots(3, 2, figsize=(13.0, 11.0), sharex=True, sharey=True)
+    for ax, group in zip(axes.ravel(), CORE_GROUPS):
+        shares = _class_shares(frequencies[group.column]) * 100.0
+        bottom = np.zeros(len(months))
+        for band in scale.bands:
+            heights = shares[band.label].to_numpy(dtype=float)
+            ax.bar(months, heights, bottom=bottom, width=0.85, color=band.color, edgecolor="white", linewidth=0.3)
+            bottom = bottom + heights
+        ax.set_title(group.label, fontsize=12.5, fontweight="bold")
+        ax.set_xticks(months)
+        ax.set_xticklabels(MONTH_LABELS)
+        ax.set_ylim(0.0, 100.0)
+        ax.set_yticks(range(0, 101, 25))
+        ax.tick_params(axis="both", labelsize=11.5)
+    for ax in axes[:, 0]:
+        ax.set_ylabel("Share of hours (%)", fontsize=12.5)
+
+    band_handles = [
+        Patch(facecolor=band.color, edgecolor="#666666", linewidth=0.5, label=f"{band.label} ({band.format_range()})")
+        for band in scale.bands
+    ]
+    fig.suptitle("Monthly mPET thermal stress frequencies of six population groups in Ioannina, 2012", fontsize=14.5, fontweight="bold", y=0.99)
+    fig.legend(
+        handles=band_handles,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.025),
+        ncol=3,
+        frameon=False,
+        fontsize=10.5,
+        title=f"{scale.name} stress classes",
+        title_fontsize=11.0,
+    )
+    fig.tight_layout(rect=(0.0, 0.07, 1.0, 0.96), h_pad=1.2, w_pad=1.0)
+    return _save_figure(fig=fig, output_path=output_path)
 
 
 # [Gridded Europe map builders]
