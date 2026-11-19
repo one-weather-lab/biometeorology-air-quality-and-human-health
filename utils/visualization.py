@@ -726,18 +726,18 @@ def plot_mpet_bioclimate(
         Patch(facecolor=band.color, edgecolor="#666666", linewidth=0.5, label=f"{band.label} ({band.format_range()})")
         for band in scale.bands
     ]
-    fig.suptitle("Monthly mPET thermal stress frequencies of six population groups in Ioannina, 2012", fontsize=14.5, fontweight="bold", y=0.99)
+    fig.suptitle("Monthly mPET thermal stress frequencies of six population groups in Ioannina, 2012", fontsize=14.5, fontweight="bold", y=0.995)
     fig.legend(
         handles=band_handles,
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.025),
+        bbox_to_anchor=(0.5, 0.045),
         ncol=3,
         frameon=False,
         fontsize=10.5,
         title=f"{scale.name} stress classes",
         title_fontsize=11.0,
     )
-    fig.tight_layout(rect=(0.0, 0.07, 1.0, 0.96), h_pad=1.2, w_pad=1.0)
+    fig.tight_layout(rect=(0.0, 0.05, 1.0, 0.985), h_pad=1.2, w_pad=1.0)
     return _save_figure(fig=fig, output_path=output_path)
 
 

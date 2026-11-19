@@ -388,7 +388,7 @@ def format_activity_spread(df: pd.DataFrame, season_labels: dict[str, str]) -> s
     body = f"{light.age_years} y, {light.height_m:.2f} m, {light.weight_kg:g} kg"
     header = f"{'Day':24s} " + " ".join(f"{group.short_label:36s}" for group in ACTIVITY_GROUPS) + " Heavy minus light [K]"
     lines = [
-        f"Male outdoor workers ({body}): daily mPET minimum and maximum by activity level:",
+        f"Daily minimum and maximum mPET by activity level for male outdoor workers ({body}):",
         header,
         "-" * len(header),
     ]
