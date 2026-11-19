@@ -2,8 +2,8 @@
 Script Name: reports.py
 Purpose: Text summaries printed by the thermophysiological indices notebook.
 Author(s): Christos Giannaros, One Weather Lab, UoI <chris.giannaros@uoi.gr>
-Last updated: 2026-11-17
-Version: 0.1.0
+Last updated: 2026-11-18
+Version: 0.2.0
 License: MIT
 """
 
@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from .indices import BLANK_LABEL, _evaluate_radiative_load
-from .readers import _format_utc_timestamp
+from .readers import ACTIVITY_GROUPS, CORE_GROUPS, _format_utc_timestamp
 from .scales import (
     _align_utci_to_pet_classes,
     PET_SCALE,
@@ -334,3 +334,68 @@ def format_radiative_load(df: pd.DataFrame, timestamp: str) -> str:
         f"{no_load['pet_class']:24s} {_utci_text(no_load['utci'])} {no_load['utci_class']:24s}",
         f"{'Shift (No load - Calculated)':48s} {no_load['pet'] - calc['pet']:+9.2f} {'':24s} {utci_shift}",
     ])
+
+
+# [Section 5: mPET across population groups]
+def format_mpet_daily_table(df: pd.DataFrame, season_labels: dict[str, str]) -> str:
+    """Summarise the mPET of the six population groups as daily minimum and maximum with their hours.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Hourly table from ``read_hourly_mpet`` with ``time_utc`` and the mPET column of each
+        group [degC].
+    season_labels : dict of str to str
+        Day label for each date (``YYYY-MM-DD``), in display order.
+
+    Returns
+    -------
+    str
+        Record count line, then one block per day with one row per group.
+    """
+    dates = _date_strings(df)
+    width = max(len(group.label) for group in CORE_GROUPS)
+    blocks = [
+        f"Loaded {len(df):,} hourly mPET records in Ioannina; daily minimum and maximum of six population groups,\n"
+        "with clothing insulation adjusted automatically between 0.3 and 2.5 clo:"
+    ]
+    for date_str, day_label in season_labels.items():
+        sub = df[dates == date_str]
+        rows = [f"  {group.label:{width}s}  {_format_minmax(sub, group.column, '°C')}" for group in CORE_GROUPS]
+        blocks.append("\n".join([day_label, *rows]))
+    return "\n\n".join(blocks)
+
+
+def format_activity_spread(df: pd.DataFrame, season_labels: dict[str, str]) -> str:
+    """Summarise the mPET of male outdoor workers by activity level and the heavy-minus-light difference.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Hourly table from ``read_hourly_mpet`` with ``time_utc`` and the mPET columns of the
+        male workers at light, moderate and heavy labor [degC].
+    season_labels : dict of str to str
+        Day label for each date (``YYYY-MM-DD``), in display order.
+
+    Returns
+    -------
+    str
+        Title and one row per day with each activity level's minimum and maximum, and the day's
+        minimum and maximum of heavy minus light labor [K] with the UTC hour of the maximum.
+    """
+    dates = _date_strings(df)
+    light, heavy = ACTIVITY_GROUPS[0], ACTIVITY_GROUPS[-1]
+    body = f"{light.age_years} y, {light.height_m:.2f} m, {light.weight_kg:g} kg"
+    header = f"{'Day':24s} " + " ".join(f"{group.short_label:36s}" for group in ACTIVITY_GROUPS) + " Heavy minus light [K]"
+    lines = [
+        f"Daily minimum and maximum mPET by activity level for male outdoor workers ({body}):",
+        header,
+        "-" * len(header),
+    ]
+    for date_str, day_label in season_labels.items():
+        sub = df[dates == date_str]
+        spread = (sub[heavy.column] - sub[light.column]).round(1)
+        hour_of_max = sub.loc[spread.idxmax(), "time_utc"].hour
+        cells = " ".join(f"{_format_minmax(sub, group.column, '°C'):36s}" for group in ACTIVITY_GROUPS)
+        lines.append(f"{day_label:24s} {cells} {spread.min():5.2f} .. {spread.max():5.2f} K (max at {hour_of_max:02d}Z)")
+    return "\n".join(lines)

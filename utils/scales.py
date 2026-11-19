@@ -3,8 +3,8 @@ Script Name: scales.py
 Purpose: Thermal-stress assessment scales (PET/mPET and UTCI) and vectorized
          classification helpers.
 Author(s): Christos Giannaros, One Weather Lab, UoI <chris.giannaros@uoi.gr>
-Last updated: 2026-11-17
-Version: 0.2.0
+Last updated: 2026-11-18
+Version: 0.3.0
 License: MIT
 """
 
@@ -16,6 +16,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+
+from .readers import CORE_GROUPS, PopulationGroup
 
 
 # --- Classes ---
@@ -158,6 +160,24 @@ def _align_utci_to_pet_classes(utci_classes: pd.Series) -> pd.Series:
     return utci_classes.replace(UTCI_TO_PET_CLASS)
 
 
+def _class_shares(frequencies: pd.DataFrame) -> pd.DataFrame:
+    """Convert monthly class counts to shares of each month's hours.
+
+    Parameters
+    ----------
+    frequencies : pandas.DataFrame
+        Hourly counts per class, months in rows and classes in columns, as returned by
+        ``class_frequencies``.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Same layout holding each count divided by its month's total, so that every row
+        sums to 1.0. A month without any counted hour is ``NaN``.
+    """
+    return frequencies.div(frequencies.sum(axis=1).replace(0, np.nan), axis=0)
+
+
 # [Classification]
 def classify(values: Any, scale: ThermalScale) -> np.ndarray | pd.Series:
     """Classify numeric thermal-index values into stress-class labels.
@@ -194,6 +214,74 @@ def classify(values: Any, scale: ThermalScale) -> np.ndarray | pd.Series:
     if is_series:
         return pd.Series(out, index=values.index, name=values.name, dtype=object)
     return out
+
+
+# [Class frequencies]
+def class_frequencies(series: pd.Series, scale: ThermalScale) -> pd.DataFrame:
+    """Count the hours of each stress class in each calendar month.
+
+    Parameters
+    ----------
+    series : pandas.Series
+        Hourly index values [degC] with a ``DatetimeIndex``; the month of each hour is
+        read from the index as given. Non-finite values are not counted.
+    scale : ThermalScale
+        Assessment scale (``PET_SCALE`` for PET and mPET) defining the classes.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Integer hour counts, months 1 to 12 in rows (index named ``month``) and the
+        classes of ``scale`` in columns, ordered from coldest to warmest. A class or
+        month without hours holds 0.
+    """
+    if not isinstance(series.index, pd.DatetimeIndex):
+        raise ValueError("series must have a DatetimeIndex")
+    if series.empty:
+        raise ValueError("series is empty")
+
+    classes = classify(values=series, scale=scale)
+    column_of = {label: position for position, label in enumerate(scale.labels)}
+    counts = np.zeros((12, len(scale.labels)), dtype=int)
+    for month, label in zip(series.index.month, classes):
+        if isinstance(label, str):
+            counts[month - 1, column_of[label]] += 1
+    return pd.DataFrame(
+        counts,
+        index=pd.RangeIndex(1, 13, name="month"),
+        columns=list(scale.labels),
+    )
+
+
+def group_class_frequencies(
+    df: pd.DataFrame,
+    scale: ThermalScale,
+    *,
+    groups: tuple[PopulationGroup, ...] = CORE_GROUPS,
+) -> dict[str, pd.DataFrame]:
+    """Count the hours of each stress class per month for each population group.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Hourly table from ``read_hourly_mpet`` with ``time_utc`` and the mPET column of
+        every group [degC].
+    scale : ThermalScale
+        Assessment scale (``PET_SCALE``) defining the classes.
+    groups : tuple of PopulationGroup, optional
+        Groups to classify. Defaults to the six groups of the population comparison.
+
+    Returns
+    -------
+    dict of str to pandas.DataFrame
+        ``class_frequencies`` of each group, keyed by its mPET column name, in the order
+        of ``groups``.
+    """
+    missing = [group.column for group in groups if group.column not in df.columns]
+    if missing:
+        raise ValueError(f"DataFrame missing group columns {missing}")
+    hourly = df.set_index("time_utc")
+    return {group.column: class_frequencies(series=hourly[group.column], scale=scale) for group in groups}
 
 
 # [Validity masking]
